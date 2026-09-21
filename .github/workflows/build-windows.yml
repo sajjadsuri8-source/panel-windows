@@ -1,0 +1,95 @@
+name: Build Panel for Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "Panel/**"
+      - "installer/**"
+      - ".github/workflows/build-windows.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Generate Panel icon
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $bmp = New-Object System.Drawing.Bitmap 256,256
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+          $g.Clear([System.Drawing.Color]::FromArgb(8,19,31))
+          $gold = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(231,203,121))
+          $font = New-Object System.Drawing.Font "Segoe UI",150,([System.Drawing.FontStyle]::Bold),([System.Drawing.GraphicsUnit]::Pixel)
+          $format = New-Object System.Drawing.StringFormat
+          $format.Alignment = [System.Drawing.StringAlignment]::Center
+          $format.LineAlignment = [System.Drawing.StringAlignment]::Center
+          $g.DrawString("P",$font,$gold,(New-Object System.Drawing.RectangleF 0,0,256,245),$format)
+          $icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon())
+          $stream = [System.IO.File]::Create("$env:GITHUB_WORKSPACE\Panel\Panel.ico")
+          $icon.Save($stream)
+          $stream.Close()
+          $icon.Dispose()
+          $font.Dispose()
+          $gold.Dispose()
+          $g.Dispose()
+          $bmp.Dispose()
+
+      - name: Restore
+        run: dotnet restore Panel/Panel.csproj
+
+      - name: Publish portable app
+        run: dotnet publish Panel/Panel.csproj -c Release -r win-x64 --self-contained true -o dist -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false
+
+      - name: Verify executable
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dist\Panel.exe")) { throw "Panel.exe was not created" }
+          $size = (Get-Item "dist\Panel.exe").Length
+          if ($size -lt 1000000) { throw "Panel.exe is unexpectedly small" }
+          Write-Host "Panel.exe size: $size bytes"
+
+      - name: Create portable ZIP
+        shell: pwsh
+        run: Compress-Archive -Path "dist\*" -DestinationPath "Panel-Portable.zip" -Force
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer\Panel.iss"
+          if (!(Test-Path "release\Panel-Setup.exe")) { throw "Panel-Setup.exe was not created" }
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Panel-Windows-x64
+          path: |
+            release/Panel-Setup.exe
+            Panel-Portable.zip
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v1.0.${{ github.run_number }}"
+          gh release create $tag "release\Panel-Setup.exe" "Panel-Portable.zip" --title "Panel for Windows" --notes "Windows x64 build of Panel. Includes installer and portable edition."
