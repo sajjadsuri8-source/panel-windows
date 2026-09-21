@@ -23,19 +23,12 @@ public sealed class MainForm : Form
         Font = new Font("Tahoma", 9);
         KeyPreview = true;
 
-        dataDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Panel");
+        dataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Panel");
         settingsPath = Path.Combine(dataDirectory, "companies.json");
         Directory.CreateDirectory(dataDirectory);
 
         var top = BuildToolbar();
-        var status = new StatusStrip
-        {
-            SizingGrip = false,
-            BackColor = Color.FromArgb(8, 19, 31),
-            ForeColor = Color.White
-        };
+        var status = new StatusStrip { SizingGrip = false, BackColor = Color.FromArgb(8, 19, 31), ForeColor = Color.White };
         status.Items.Add(statusText);
 
         webView.Dock = DockStyle.Fill;
@@ -48,53 +41,17 @@ public sealed class MainForm : Form
         Load += async (_, _) => await InitializeAsync();
         KeyDown += (_, e) =>
         {
-            if (e.KeyCode == Keys.F5)
-            {
-                webView.Reload();
-                e.Handled = true;
-            }
-            else if (e.Alt && e.KeyCode == Keys.Left)
-            {
-                if (webView.CanGoBack) webView.GoBack();
-                e.Handled = true;
-            }
-            else if (e.KeyCode == Keys.F11)
-            {
-                ToggleFullscreen();
-                e.Handled = true;
-            }
+            if (e.KeyCode == Keys.F5) { webView.Reload(); e.Handled = true; }
+            else if (e.Alt && e.KeyCode == Keys.Left) { if (webView.CanGoBack) webView.GoBack(); e.Handled = true; }
+            else if (e.KeyCode == Keys.F11) { ToggleFullscreen(); e.Handled = true; }
         };
     }
 
     private Panel BuildToolbar()
     {
-        var panel = new Panel
-        {
-            Dock = DockStyle.Top,
-            Height = 48,
-            Padding = new Padding(8, 7, 8, 6),
-            BackColor = Color.FromArgb(8, 19, 31)
-        };
-
-        var title = new Label
-        {
-            Text = "Panel",
-            AutoSize = false,
-            Width = 90,
-            Dock = DockStyle.Left,
-            ForeColor = Color.FromArgb(231, 203, 121),
-            Font = new Font("Segoe UI", 14, FontStyle.Bold),
-            TextAlign = ContentAlignment.MiddleLeft
-        };
-
-        var actions = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Right,
-            Width = 440,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false,
-            BackColor = Color.Transparent
-        };
+        var panel = new Panel { Dock = DockStyle.Top, Height = 48, Padding = new Padding(8, 7, 8, 6), BackColor = Color.FromArgb(8, 19, 31) };
+        var title = new Label { Text = "Panel", AutoSize = false, Width = 90, Dock = DockStyle.Left, ForeColor = Color.FromArgb(231, 203, 121), Font = new Font("Segoe UI", 14, FontStyle.Bold), TextAlign = ContentAlignment.MiddleLeft };
+        var actions = new FlowLayoutPanel { Dock = DockStyle.Right, Width = 440, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, BackColor = Color.Transparent };
 
         companiesBox.Width = 190;
         companiesBox.Height = 32;
@@ -106,7 +63,6 @@ public sealed class MainForm : Form
         actions.Controls.Add(MakeButton("ویرایش", (_, _) => EditCompany()));
         actions.Controls.Add(MakeButton("+ شرکت", (_, _) => AddCompany()));
         actions.Controls.Add(companiesBox);
-
         panel.Controls.Add(actions);
         panel.Controls.Add(title);
         return panel;
@@ -114,16 +70,7 @@ public sealed class MainForm : Form
 
     private static Button MakeButton(string text, EventHandler click)
     {
-        var button = new Button
-        {
-            Text = text,
-            AutoSize = true,
-            Height = 32,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(16, 34, 56),
-            ForeColor = Color.White,
-            Margin = new Padding(4, 0, 0, 0)
-        };
+        var button = new Button { Text = text, AutoSize = true, Height = 32, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(16, 34, 56), ForeColor = Color.White, Margin = new Padding(4, 0, 0, 0) };
         button.FlatAppearance.BorderColor = Color.FromArgb(45, 74, 102);
         button.Click += click;
         return button;
@@ -136,8 +83,7 @@ public sealed class MainForm : Form
             LoadCompanies();
             RefreshCompanyList();
 
-            var userData = Path.Combine(dataDirectory, "WebView2");
-            var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: userData);
+            var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: Path.Combine(dataDirectory, "WebView2"));
             await webView.EnsureCoreWebView2Async(environment);
 
             webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
@@ -146,26 +92,19 @@ public sealed class MainForm : Form
             webView.CoreWebView2.Settings.IsZoomControlEnabled = true;
             webView.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled = true;
 
-            webView.CoreWebView2.NewWindowRequested += (_, e) =>
+            webView.CoreWebView2.NewWindowRequested += (sender, e) =>
             {
                 e.Handled = true;
-                if (Uri.TryCreate(e.Uri, UriKind.Absolute, out _))
-                    webView.CoreWebView2.Navigate(e.Uri);
+                if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var targetUri))
+                    webView.CoreWebView2.Navigate(targetUri.AbsoluteUri);
             };
-
             webView.CoreWebView2.NavigationStarting += (_, _) => statusText.Text = "در حال اتصال…";
-            webView.CoreWebView2.NavigationCompleted += (_, e) =>
-                statusText.Text = e.IsSuccess ? "متصل" : "اتصال برقرار نشد";
-
+            webView.CoreWebView2.NavigationCompleted += (_, e) => statusText.Text = e.IsSuccess ? "متصل" : "اتصال برقرار نشد";
             NavigateSelectedCompany();
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                "اجرای Panel ممکن نشد. Microsoft Edge WebView2 Runtime را نصب یا به‌روزرسانی کنید.\n\n" + ex.Message,
-                "Panel",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            MessageBox.Show("اجرای Panel ممکن نشد. Microsoft Edge WebView2 Runtime را نصب یا به‌روزرسانی کنید.\n\n" + ex.Message, "Panel", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -181,18 +120,11 @@ public sealed class MainForm : Form
                     companies.AddRange(loaded.Where(x => !string.IsNullOrWhiteSpace(x.Name) && !string.IsNullOrWhiteSpace(x.Url)));
             }
         }
-        catch
-        {
-            // A damaged local settings file must not prevent the application from opening.
-        }
+        catch { }
 
         if (companies.Count == 0)
         {
-            companies.Add(new CompanyProfile
-            {
-                Name = "گلچین",
-                Url = "http://100.79.217.1:8790/"
-            });
+            companies.Add(new CompanyProfile { Name = "گلچین", Url = "http://100.79.217.1:8790/" });
             SaveCompanies();
         }
     }
@@ -208,24 +140,19 @@ public sealed class MainForm : Form
         companiesBox.DataSource = null;
         companiesBox.DisplayMember = nameof(CompanyProfile.Name);
         companiesBox.DataSource = companies.ToList();
-        if (companies.Count > 0)
-            companiesBox.SelectedIndex = Math.Clamp(selectedIndex, 0, companies.Count - 1);
+        if (companies.Count > 0) companiesBox.SelectedIndex = Math.Clamp(selectedIndex, 0, companies.Count - 1);
     }
 
     private void NavigateSelectedCompany()
     {
-        if (webView.CoreWebView2 is null || companiesBox.SelectedItem is not CompanyProfile company)
-            return;
-
-        if (Uri.TryCreate(company.Url, UriKind.Absolute, out var uri))
-            webView.CoreWebView2.Navigate(uri.AbsoluteUri);
+        if (webView.CoreWebView2 is null || companiesBox.SelectedItem is not CompanyProfile company) return;
+        if (Uri.TryCreate(company.Url, UriKind.Absolute, out var uri)) webView.CoreWebView2.Navigate(uri.AbsoluteUri);
     }
 
     private void AddCompany()
     {
         using var dialog = new CompanyDialog();
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
-
         companies.Add(new CompanyProfile { Name = dialog.CompanyName, Url = dialog.CompanyUrl });
         SaveCompanies();
         RefreshCompanyList(companies.Count - 1);
@@ -235,10 +162,8 @@ public sealed class MainForm : Form
     {
         if (companiesBox.SelectedIndex < 0 || companiesBox.SelectedItem is not CompanyProfile current) return;
         var index = companiesBox.SelectedIndex;
-
         using var dialog = new CompanyDialog(current.Name, current.Url);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
-
         current.Name = dialog.CompanyName;
         current.Url = dialog.CompanyUrl;
         SaveCompanies();
@@ -247,15 +172,7 @@ public sealed class MainForm : Form
 
     private void ToggleFullscreen()
     {
-        if (FormBorderStyle == FormBorderStyle.None)
-        {
-            FormBorderStyle = FormBorderStyle.Sizable;
-            WindowState = FormWindowState.Maximized;
-        }
-        else
-        {
-            FormBorderStyle = FormBorderStyle.None;
-            WindowState = FormWindowState.Maximized;
-        }
+        FormBorderStyle = FormBorderStyle == FormBorderStyle.None ? FormBorderStyle.Sizable : FormBorderStyle.None;
+        WindowState = FormWindowState.Maximized;
     }
 }
